@@ -80,7 +80,7 @@ export class PDFLoader extends BufferLoader {
 
 async function PDFLoaderImports() {
   try {
-    const { default: mod } = await import("pdfjs-dist/legacy/build/pdf.js");
+    const { default: mod } = await import("pdfjs-dist");
     const { getDocument, version } = mod;
     return { getDocument, version };
   } catch (e) {
