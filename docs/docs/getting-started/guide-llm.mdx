@@ -162,6 +162,12 @@ For this example, you'll need to set the SerpAPI environment variables in the `.
 SERPAPI_API_KEY="..."
 ```
 
+Install `serpapi` package (Google Search API):
+
+```bash npm2yarn
+npm install -S serpapi
+```
+
 Now we can get started!
 
 ```typescript
@@ -171,7 +177,14 @@ import { SerpAPI } from "langchain/tools";
 import { Calculator } from "langchain/tools/calculator";
 
 const model = new OpenAI({ temperature: 0 });
-const tools = [new SerpAPI(), new Calculator()];
+const tools = [
+  new SerpAPI(process.env.SERPAPI_API_KEY, {
+    location: "Austin,Texas,United States",
+    hl: "en",
+    gl: "us",
+  }),
+  new Calculator(),
+];
 
 const executor = await initializeAgentExecutor(
   tools,
