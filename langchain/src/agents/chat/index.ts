@@ -8,21 +8,25 @@ import {
 import { AgentStep } from "../../schema/index.js";
 import { Tool } from "../../tools/base.js";
 import { Optional } from "../../types/type-utils.js";
-import { Agent, AgentArgs } from "../agent.js";
+import { Agent, AgentArgs, OutputParserArgs } from "../agent.js";
 import { AgentInput } from "../types.js";
 import { ChatAgentOutputParser } from "./outputParser.js";
 import { FORMAT_INSTRUCTIONS, PREFIX, SUFFIX } from "./prompt.js";
 
-export type CreatePromptArgs = {
+const DEFAULT_HUMAN_MESSAGE_TEMPLATE = "{input}\n\n{agent_scratchpad}";
+
+export interface ChatCreatePromptArgs {
   /** String to put after the list of tools. */
   suffix?: string;
   /** String to put before the list of tools. */
   prefix?: string;
+  /** String to use directly as the human message template. */
+  humanMessageTemplate?: string;
   /** List of input variables the final prompt will expect. */
   inputVariables?: string[];
-};
+}
 
-type ChatAgentInput = Optional<AgentInput, "outputParser">;
+export type ChatAgentInput = Optional<AgentInput, "outputParser">;
 
 /**
  * Agent for the MRKL chain.
@@ -61,12 +65,12 @@ export class ChatAgent extends Agent {
     }
   }
 
-  static getDefaultOutputParser() {
+  static getDefaultOutputParser(_fields?: OutputParserArgs) {
     return new ChatAgentOutputParser();
   }
 
-  constructScratchPad(steps: AgentStep[]): string {
-    const agentScratchpad = super.constructScratchPad(steps);
+  async constructScratchPad(steps: AgentStep[]): Promise<string> {
+    const agentScratchpad = await super.constructScratchPad(steps);
     if (agentScratchpad) {
       return `This was your previous work (but I haven't seen any of it! I only see what you return as final answer):\n${agentScratchpad}`;
     }
@@ -80,9 +84,14 @@ export class ChatAgent extends Agent {
    * @param args - Arguments to create the prompt with.
    * @param args.suffix - String to put after the list of tools.
    * @param args.prefix - String to put before the list of tools.
+   * @param args.humanMessageTemplate - String to use directly as the human message template
    */
-  static createPrompt(tools: Tool[], args?: CreatePromptArgs) {
-    const { prefix = PREFIX, suffix = SUFFIX } = args ?? {};
+  static createPrompt(tools: Tool[], args?: ChatCreatePromptArgs) {
+    const {
+      prefix = PREFIX,
+      suffix = SUFFIX,
+      humanMessageTemplate = DEFAULT_HUMAN_MESSAGE_TEMPLATE,
+    } = args ?? {};
     const toolStrings = tools
       .map((tool) => `${tool.name}: ${tool.description}`)
       .join("\n");
@@ -91,7 +100,7 @@ export class ChatAgent extends Agent {
     );
     const messages = [
       SystemMessagePromptTemplate.fromTemplate(template),
-      HumanMessagePromptTemplate.fromTemplate("{input}\n\n{agent_scratchpad}"),
+      HumanMessagePromptTemplate.fromTemplate(humanMessageTemplate),
     ];
     return ChatPromptTemplate.fromPromptMessages(messages);
   }
@@ -99,14 +108,14 @@ export class ChatAgent extends Agent {
   static fromLLMAndTools(
     llm: BaseLanguageModel,
     tools: Tool[],
-    args?: CreatePromptArgs & AgentArgs
+    args?: ChatCreatePromptArgs & AgentArgs
   ) {
     ChatAgent.validateTools(tools);
     const prompt = ChatAgent.createPrompt(tools, args);
     const chain = new LLMChain({
       prompt,
       llm,
-      callbackManager: args?.callbackManager,
+      callbacks: args?.callbacks ?? args?.callbackManager,
     });
     const outputParser =
       args?.outputParser ?? ChatAgent.getDefaultOutputParser();
